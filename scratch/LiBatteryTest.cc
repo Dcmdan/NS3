@@ -53,18 +53,23 @@ main (int argc, char **argv)
 
   es->SetC(1-0.166);
   es->SetK(0.0169);
-  es->SetInitialEnergy(15000);
+  es->SetInitialEnergy(31752);
   Time now = Simulator::Now ();
 
   sem->SetCurrentA (1);
   now += Seconds (1);
-  for (int i = 0; i < 200; i++)
+  for (int i = 0; i < 360; i++)
   {
 	  Simulator::Schedule (now,
 	                       &SimpleDeviceEnergyModel::SetCurrentA,
 	                       sem,
-	                       (i % 2));
-	  now += Seconds (10);
+	                               0.05);
+	  now += Seconds (600);
+	  Simulator::Schedule (now,
+	                       &SimpleDeviceEnergyModel::SetCurrentA,
+	                       sem,
+	                               0);
+	  now += Seconds (60);
   }
 
 

@@ -32,6 +32,16 @@ LiIonBatteryModel::GetTypeId (void)
                    DoubleValue (0.10), // as a fraction of the initial energy
                    MakeDoubleAccessor (&LiIonBatteryModel::m_lowBatteryTh),
                    MakeDoubleChecker<double> ())
+    .AddAttribute ("ConstantC",
+                   "ConstantC",
+                   DoubleValue (1 - 0.166),
+                   MakeDoubleAccessor (&LiIonBatteryModel::m_c),
+                   MakeDoubleChecker<double> ())
+    .AddAttribute ("ConstantK",
+                   "ConstantK",
+                   DoubleValue (0.0169),  // in Volts
+                   MakeDoubleAccessor (&LiIonBatteryModel::m_k),
+                   MakeDoubleChecker<double> ())
     .AddAttribute ("InitialCellVoltage",
                    "Initial (maximum) voltage of the cell (fully charged).",
                    DoubleValue (4.05), // in Volts
@@ -80,7 +90,7 @@ LiIonBatteryModel::GetTypeId (void)
                    MakeDoubleChecker<double> ())
     .AddAttribute ("PeriodicEnergyUpdateInterval",
                    "Time between two consecutive periodic energy updates.",
-                   TimeValue (Seconds (0.01)),
+                   TimeValue (Seconds (0.1)),
                    MakeTimeAccessor (&LiIonBatteryModel::SetEnergyUpdateInterval,
                                      &LiIonBatteryModel::GetEnergyUpdateInterval),
                    MakeTimeChecker ())
@@ -97,8 +107,10 @@ LiIonBatteryModel::LiIonBatteryModel ()
     m_lastUpdateTime (Seconds (0.0))
 {
   NS_LOG_FUNCTION (this);
-  m_c = 1 - 0.166;
-  m_k = 0.0169;
+  m_y1b = m_remainingEnergyJ / m_supplyVoltageV;
+  m_y2b = (1 - m_c) * m_y1b / m_c ;
+  I1 = CalculateTotalCurrent();
+  I2 = CalculateTotalCurrent();
 }
 
 LiIonBatteryModel::~LiIonBatteryModel ()
@@ -124,7 +136,6 @@ LiIonBatteryModel::SetInitialEnergy (double initialEnergyJ)
   NS_LOG_FUNCTION (this << initialEnergyJ);
   NS_ASSERT (initialEnergyJ >= 0);
   m_initialEnergyJ = initialEnergyJ;
-  // set remaining energy to be initial energy
   m_remainingEnergyJ = m_initialEnergyJ;
   m_y1b = m_remainingEnergyJ / m_supplyVoltageV;
   m_y2b = (1 - m_c) * m_y1b / m_c ;
