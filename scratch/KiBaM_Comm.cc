@@ -13,7 +13,7 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE ("EnergyWithHarvestingExample");
+NS_LOG_COMPONENT_DEFINE ("KiBaM_Comm");
 
 static inline std::string
 PrintReceivedPacket (Address& from)
@@ -261,17 +261,20 @@ main (int argc, char *argv[])
   /***************************************************************************/
   // all traces are connected to node 1 (Destination)
   // energy source
-  Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (1));
-  basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
+  Ptr<BasicEnergySource> liIonBatteryPtr = DynamicCast<BasicEnergySource> (sources.Get (1));
+  //Ptr<BasicEnergySource> basPtr = DynamicCast<BasicEnergySource> (sources.Get (1));
+  liIonBatteryPtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
   // device energy model
   Ptr<DeviceEnergyModel> basicRadioModelPtr =
-    basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+		  liIonBatteryPtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+		  //basPtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+  //Ptr<DeviceEnergyModel> testPtr =
   NS_ASSERT (basicRadioModelPtr != 0);
-  basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
+  //basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
   // energy harvester
   Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester> (harvesters.Get (1));
-  basicHarvesterPtr->TraceConnectWithoutContext ("HarvestedPower", MakeCallback (&HarvestedPower));
-  basicHarvesterPtr->TraceConnectWithoutContext ("TotalEnergyHarvested", MakeCallback (&TotalEnergyHarvested));
+  //basicHarvesterPtr->TraceConnectWithoutContext ("HarvestedPower", MakeCallback (&HarvestedPower));
+  //basicHarvesterPtr->TraceConnectWithoutContext ("TotalEnergyHarvested", MakeCallback (&TotalEnergyHarvested));
   /***************************************************************************/
 
 
@@ -280,7 +283,7 @@ main (int argc, char *argv[])
   Simulator::Schedule (Seconds (startTime), &GenerateTraffic, source, PpacketSize,
                        networkNodes.Get (0), numPackets, interPacketInterval);
 
-  Simulator::Stop (Seconds (10.0));
+  Simulator::Stop (Seconds (600.0));
   Simulator::Run ();
   Simulator::Destroy ();
 

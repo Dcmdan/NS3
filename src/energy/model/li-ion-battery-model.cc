@@ -35,12 +35,12 @@ LiIonBatteryModel::GetTypeId (void)
     .AddAttribute ("ConstantC",
                    "ConstantC",
                    DoubleValue (1 - 0.166),
-                   MakeDoubleAccessor (&LiIonBatteryModel::m_c),
+                   MakeDoubleAccessor (&LiIonBatteryModel::SetC),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("ConstantK",
                    "ConstantK",
                    DoubleValue (0.0169),  // in Volts
-                   MakeDoubleAccessor (&LiIonBatteryModel::m_k),
+                   MakeDoubleAccessor (&LiIonBatteryModel::SetK),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("InitialCellVoltage",
                    "Initial (maximum) voltage of the cell (fully charged).",
@@ -107,10 +107,7 @@ LiIonBatteryModel::LiIonBatteryModel ()
     m_lastUpdateTime (Seconds (0.0))
 {
   NS_LOG_FUNCTION (this);
-  m_y1b = m_remainingEnergyJ / m_supplyVoltageV;
-  m_y2b = (1 - m_c) * m_y1b / m_c ;
-  I1 = CalculateTotalCurrent();
-  I2 = CalculateTotalCurrent();
+  SetInitialEnergy(m_initialEnergyJ);
 }
 
 LiIonBatteryModel::~LiIonBatteryModel ()
@@ -122,12 +119,14 @@ void
 LiIonBatteryModel::SetC (double c)
 {
   m_c = c;
+  SetInitialEnergy(m_initialEnergyJ);
 }
 
 void
 LiIonBatteryModel::SetK (double k)
 {
   m_k = k;
+  SetInitialEnergy(m_initialEnergyJ);
 }
 
 void
@@ -135,7 +134,7 @@ LiIonBatteryModel::SetInitialEnergy (double initialEnergyJ)
 {
   NS_LOG_FUNCTION (this << initialEnergyJ);
   NS_ASSERT (initialEnergyJ >= 0);
-  m_initialEnergyJ = initialEnergyJ;
+  m_initialEnergyJ = m_c * initialEnergyJ;
   m_remainingEnergyJ = m_initialEnergyJ;
   m_y1b = m_remainingEnergyJ / m_supplyVoltageV;
   m_y2b = (1 - m_c) * m_y1b / m_c ;
@@ -307,8 +306,8 @@ LiIonBatteryModel::CalculateRemainingEnergy (void)
   else 
     {
       m_remainingEnergyJ -= energyToDecreaseJ;
+      m_drainedCapacity += ((m_y1b - m_y1) / 3600) / m_c;
     }  
-  m_drainedCapacity += ((m_y1b - m_y1) / 3600);
   // update the supply voltage
   m_supplyVoltageV = GetVoltage (I2);
   I1 = I2;
