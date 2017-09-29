@@ -4,7 +4,7 @@
 #include "ns3/traced-value.h"
 #include "energy-source.h"
 #include "ns3/nstime.h"
-#include "ns3/event-id.h"s
+#include "ns3/event-id.h"
 
 namespace ns3 {
 
@@ -34,6 +34,7 @@ private:
   void HandleEnergyDrainedEvent (void);
   void CalculateRemainingEnergy (void);
   double GetVoltage (double current) const;
+  void init(void);
 
 
 private:
@@ -62,6 +63,8 @@ private:
   double m_y1b;
   double m_y2b;
   double I1, I2;
+
+  bool isInit;
 };
 
 }

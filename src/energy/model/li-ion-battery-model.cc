@@ -35,12 +35,12 @@ LiIonBatteryModel::GetTypeId (void)
     .AddAttribute ("ConstantC",
                    "ConstantC",
                    DoubleValue (1 - 0.166),
-                   MakeDoubleAccessor (&LiIonBatteryModel::SetC),
+                   MakeDoubleAccessor (&LiIonBatteryModel::m_c),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("ConstantK",
                    "ConstantK",
-                   DoubleValue (0.0169),  // in Volts
-                   MakeDoubleAccessor (&LiIonBatteryModel::SetK),
+                   DoubleValue (0.0169),
+                   MakeDoubleAccessor (&LiIonBatteryModel::m_k),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("InitialCellVoltage",
                    "Initial (maximum) voltage of the cell (fully charged).",
@@ -107,7 +107,7 @@ LiIonBatteryModel::LiIonBatteryModel ()
     m_lastUpdateTime (Seconds (0.0))
 {
   NS_LOG_FUNCTION (this);
-  SetInitialEnergy(m_initialEnergyJ);
+  isInit = false;
 }
 
 LiIonBatteryModel::~LiIonBatteryModel ()
@@ -119,14 +119,12 @@ void
 LiIonBatteryModel::SetC (double c)
 {
   m_c = c;
-  SetInitialEnergy(m_initialEnergyJ);
 }
 
 void
 LiIonBatteryModel::SetK (double k)
 {
   m_k = k;
-  SetInitialEnergy(m_initialEnergyJ);
 }
 
 void
@@ -134,12 +132,7 @@ LiIonBatteryModel::SetInitialEnergy (double initialEnergyJ)
 {
   NS_LOG_FUNCTION (this << initialEnergyJ);
   NS_ASSERT (initialEnergyJ >= 0);
-  m_initialEnergyJ = m_c * initialEnergyJ;
-  m_remainingEnergyJ = m_initialEnergyJ;
-  m_y1b = m_remainingEnergyJ / m_supplyVoltageV;
-  m_y2b = (1 - m_c) * m_y1b / m_c ;
-  I1 = CalculateTotalCurrent();
-  I2 = CalculateTotalCurrent();
+  m_initialEnergyJ = initialEnergyJ;
 }
 
 double
@@ -221,6 +214,16 @@ LiIonBatteryModel::IncreaseRemainingEnergy (double energyJ)
 void
 LiIonBatteryModel::UpdateEnergySource (void)
 {
+    if (!isInit)
+    {
+    	isInit = true;
+    	m_initialEnergyJ = m_c * m_initialEnergyJ;
+    	m_remainingEnergyJ = m_initialEnergyJ;
+    	m_y1b = m_remainingEnergyJ / m_supplyVoltageV;
+    	m_y2b = (1 - m_c) * m_y1b / m_c ;
+    	I1 = CalculateTotalCurrent();
+    	I2 = CalculateTotalCurrent();
+    }
   NS_LOG_FUNCTION (this);
   NS_LOG_DEBUG ("LiIonBatteryModel:Updating remaining energy at node #" <<
                 GetNode ()->GetId ());

@@ -2,19 +2,19 @@
 #include "ns3/simulator.h"
 #include "ns3/command-line.h"
 #include "ns3/simple-device-energy-model.h"
-#include "ns3/rv-battery-model.h"
+#include "ns3/basic-energy-source.h"
 #include "ns3/energy-source-container.h"
 #include "cstdio"
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE ("RvModelTest");
+NS_LOG_COMPONENT_DEFINE ("BasicModelTest");
 
 FILE *fileV;
 FILE *fileE;
 
 static void
-PrintCellInfo (Ptr<RvBatteryModel> es)
+PrintCellInfo (Ptr<BasicEnergySource> es)
 {
 	std::cout << "At " << Simulator::Now ().GetSeconds () << " Cell voltage: " << es->GetSupplyVoltage () << " V Remaining Capacity: " <<
 	  es->GetRemainingEnergy () << " J" << std::endl;
@@ -44,13 +44,7 @@ main (int argc, char **argv)
 
   Ptr<SimpleDeviceEnergyModel> sem = CreateObject<SimpleDeviceEnergyModel> ();
   Ptr<EnergySourceContainer> esCont = CreateObject<EnergySourceContainer> ();
-  Ptr<RvBatteryModel> es = CreateObject<RvBatteryModel> ();
-
-  es->SetAlpha(36000);
-  es->SetBeta(1);
-  es->SetCutoffVoltage(4.0);
-  es->SetNumOfTerms(100);
-  es->SetOpenCircuitVoltage(4.2);
+  Ptr<BasicEnergySource> es = CreateObject<BasicEnergySource> ();
 
   esCont->Add (es);
   es->SetNode (node);
@@ -58,22 +52,14 @@ main (int argc, char **argv)
   es->AppendDeviceEnergyModel (sem);
   sem->SetNode (node);
   node->AggregateObject (esCont);
-
+es->SetInitialEnergy(20000);
   Time now = Simulator::Now ();
 
   // discharge at 2.33 A for 1700 seconds
   sem->SetCurrentA (1);
-  now += Seconds (1000);
-  Simulator::Schedule (now,
-                       &SimpleDeviceEnergyModel::SetCurrentA,
-                       sem,
-                               0);
-  now += Seconds (500);
-  Simulator::Schedule (now,
-                       &SimpleDeviceEnergyModel::SetCurrentA,
-                       sem,
-                               1);
-  now += Seconds (1000);
+  now += Seconds (6000);
+
+
   PrintCellInfo (es);
 
   Simulator::Stop (now);

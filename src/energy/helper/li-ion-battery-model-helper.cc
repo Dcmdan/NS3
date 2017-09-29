@@ -5,7 +5,7 @@ namespace ns3 {
 
 LiIonBatteryModelHelper::LiIonBatteryModelHelper ()
 {
-	m_liIonBatteryModel.SetTypeId ("ns3::LiIonEnergySource");
+	m_liIonBatteryModel.SetTypeId ("ns3::LiIonBatteryModel");
 }
 
 LiIonBatteryModelHelper::~LiIonBatteryModelHelper ()

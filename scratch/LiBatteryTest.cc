@@ -51,27 +51,25 @@ main (int argc, char **argv)
   sem->SetNode (node);
   node->AggregateObject (esCont);
 
-  es->SetC(1 - 0.166);
-  es->SetK(0.0169);
   es->SetInitialEnergy(31752);
   Time now = Simulator::Now ();
 
   sem->SetCurrentA (1);
-  now += Seconds (1);
-  for (int i = 0; i < 170; i++)
+  now += Seconds (9000);
+  /*for (int i = 0; i < 33; i++)
   {
 	  Simulator::Schedule (now,
 	                       &SimpleDeviceEnergyModel::SetCurrentA,
 	                       sem,
 	                               1);
-	  now += Seconds (60);
+	  now += Seconds (300);
 	  Simulator::Schedule (now,
 	                       &SimpleDeviceEnergyModel::SetCurrentA,
 	                       sem,
 	                               0);
-	  now += Seconds (60);
+	  now += Seconds (300);
   }
-
+*/
 
   PrintCellInfo (es);
 

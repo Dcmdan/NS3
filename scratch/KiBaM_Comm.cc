@@ -13,7 +13,7 @@
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE ("KiBaM_Comm");
+NS_LOG_COMPONENT_DEFINE ("EnergyExample");
 
 static inline std::string
 PrintReceivedPacket (Address& from)
@@ -77,35 +77,17 @@ GenerateTraffic (Ptr<Socket> socket, uint32_t pktSize, Ptr<Node> n,
 void
 RemainingEnergy (double oldValue, double remainingEnergy)
 {
-  std::cout << Simulator::Now ().GetSeconds ()
-            << "s Current remaining energy = " << remainingEnergy << "J" << std::endl;
+  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
+                 << "s Current remaining energy = " << remainingEnergy << "J");
 }
 
 /// Trace function for total energy consumption at node.
 void
 TotalEnergy (double oldValue, double totalEnergy)
 {
-  std::cout << Simulator::Now ().GetSeconds ()
-            << "s Total energy consumed by radio = " << totalEnergy << "J" << std::endl;
+  NS_LOG_UNCOND (Simulator::Now ().GetSeconds ()
+                 << "s Total energy consumed by radio = " << totalEnergy << "J");
 }
-
-/// Trace function for the power harvested by the energy harvester.
-void
-HarvestedPower (double oldValue, double harvestedPower)
-{
-  std::cout << Simulator::Now ().GetSeconds ()
-            << "s Current harvested power = " << harvestedPower << " W" << std::endl;
-}
-
-/// Trace function for the total energy harvested by the node.
-void
-TotalEnergyHarvested (double oldValue, double TotalEnergyHarvested)
-{
-  std::cout << Simulator::Now ().GetSeconds ()
-            << "s Total energy harvested by harvester = "
-            << TotalEnergyHarvested << " J" << std::endl;
-}
-
 
 int
 main (int argc, char *argv[])
@@ -115,18 +97,16 @@ main (int argc, char *argv[])
   LogComponentEnable ("BasicEnergySource", LOG_LEVEL_DEBUG);
   LogComponentEnable ("DeviceEnergyModel", LOG_LEVEL_DEBUG);
   LogComponentEnable ("WifiRadioEnergyModel", LOG_LEVEL_DEBUG);
-  LogComponentEnable ("EnergyHarvester", LOG_LEVEL_DEBUG);
-  LogComponentEnable ("BasicEnergyHarvester", LOG_LEVEL_DEBUG);
-  */
+   */
 
   std::string phyMode ("DsssRate1Mbps");
   double Prss = -80;            // dBm
-  uint32_t PpacketSize = 200;   // bytes
+  uint32_t PpacketSize = 10;   // bytes
   bool verbose = false;
 
   // simulation parameters
-  uint32_t numPackets = 10000;  // number of packets to send
-  double interval = 1;          // seconds
+  uint32_t numPackets = 100000;  // number of packets to send
+  double interval = 0.05;  // seconds
   double startTime = 0.0;       // seconds
   double distanceToRx = 100.0;  // meters
   /*
@@ -134,9 +114,6 @@ main (int argc, char *argv[])
    * configuration.
    */
   double offset = 81;
-  
-  // Energy Harvester variables
-  double harvestingUpdateInterval = 1;  // seconds
 
   CommandLine cmd;
   cmd.AddValue ("phyMode", "Wifi Phy mode", phyMode);
@@ -212,31 +189,6 @@ main (int argc, char *argv[])
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (c);
 
-  /** Energy Model **/
-  /***************************************************************************/
-  /* energy source */
-  BasicEnergySourceHelper basicSourceHelper;
-  // configure energy source
-  basicSourceHelper.Set ("BasicEnergySourceInitialEnergyJ", DoubleValue (1.0));
-  // install source
-  EnergySourceContainer sources = basicSourceHelper.Install (c);
-  /* device energy model */
-  WifiRadioEnergyModelHelper radioEnergyHelper;
-  // configure radio energy model
-  radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.0174));
-  radioEnergyHelper.Set ("RxCurrentA", DoubleValue (0.0197));
-  // install device model
-  DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (devices, sources);
-
-  /* energy harvester */
-  BasicEnergyHarvesterHelper basicHarvesterHelper;
-  // configure energy harvester
-  basicHarvesterHelper.Set ("PeriodicHarvestedPowerUpdateInterval", TimeValue (Seconds (harvestingUpdateInterval)));
-  basicHarvesterHelper.Set ("HarvestablePower", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=0.1]"));
-  // install harvester on all energy sources
-  EnergyHarvesterContainer harvesters = basicHarvesterHelper.Install (sources);
-  /***************************************************************************/
-
   /** Internet stack **/
   InternetStackHelper internet;
   internet.Install (networkNodes);
@@ -247,34 +199,46 @@ main (int argc, char *argv[])
   Ipv4InterfaceContainer i = ipv4.Assign (devices);
 
   TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-  Ptr<Socket> recvSink = Socket::CreateSocket (networkNodes.Get (1), tid);  // node 1, Destination
+  Ptr<Socket> recvSink = Socket::CreateSocket (networkNodes.Get (1), tid);  // node 1, receiver
   InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (), 80);
   recvSink->Bind (local);
   recvSink->SetRecvCallback (MakeCallback (&ReceivePacket));
 
-  Ptr<Socket> source = Socket::CreateSocket (networkNodes.Get (0), tid);    // node 0, Source
+  Ptr<Socket> source = Socket::CreateSocket (networkNodes.Get (0), tid);    // node 0, sender
   InetSocketAddress remote = InetSocketAddress (Ipv4Address::GetBroadcast (), 80);
   source->SetAllowBroadcast (true);
   source->Connect (remote);
 
+  /** Energy Model **/
+  /***************************************************************************/
+  /* energy source */
+
+  LiIonBatteryModelHelper basicSourceHelper;
+  // configure energy source
+  basicSourceHelper.Set ("LiIonBatteryModelInitialEnergyJ", DoubleValue (31752));
+  // install source
+  EnergySourceContainer sources = basicSourceHelper.Install (c);
+  /* device energy model */
+  WifiRadioEnergyModelHelper radioEnergyHelper;
+  // configure radio energy model
+  radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.380));
+  radioEnergyHelper.Set ("RxCurrentA", DoubleValue (0.313));
+  radioEnergyHelper.Set ("IdleCurrentA", DoubleValue (0.273));
+  // install device model
+  DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (devices, sources);
+  /***************************************************************************/
+
   /** connect trace sources **/
   /***************************************************************************/
-  // all traces are connected to node 1 (Destination)
+  // all sources are connected to node 1
   // energy source
-  Ptr<BasicEnergySource> liIonBatteryPtr = DynamicCast<BasicEnergySource> (sources.Get (1));
-  //Ptr<BasicEnergySource> basPtr = DynamicCast<BasicEnergySource> (sources.Get (1));
-  liIonBatteryPtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
+  Ptr<LiIonBatteryModel> basicSourcePtr = DynamicCast<LiIonBatteryModel> (sources.Get (1));
+  //basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
   // device energy model
   Ptr<DeviceEnergyModel> basicRadioModelPtr =
-		  liIonBatteryPtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
-		  //basPtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
-  //Ptr<DeviceEnergyModel> testPtr =
-  NS_ASSERT (basicRadioModelPtr != 0);
-  //basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
-  // energy harvester
-  Ptr<BasicEnergyHarvester> basicHarvesterPtr = DynamicCast<BasicEnergyHarvester> (harvesters.Get (1));
-  //basicHarvesterPtr->TraceConnectWithoutContext ("HarvestedPower", MakeCallback (&HarvestedPower));
-  //basicHarvesterPtr->TraceConnectWithoutContext ("TotalEnergyHarvested", MakeCallback (&TotalEnergyHarvested));
+    basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+  NS_ASSERT (basicRadioModelPtr != NULL);
+  basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
   /***************************************************************************/
 
 
