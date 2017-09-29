@@ -261,6 +261,9 @@ public:
    */
   bool IsCommand (void) const;
 
+
+
+
   /**
    * Set the Frame Control field "Frame Type" bits
    * \param wpanMacType the frame type
@@ -414,6 +417,9 @@ public:
    */
   void SetKeyId (uint64_t keySrc, uint8_t keyIndex);
 
+
+  void SetData (uint16_t data);
+  uint16_t GetData (void);
   /**
    * \brief Get the type ID.
    * \return the object TypeId
@@ -430,6 +436,8 @@ public:
 private:
   /* Frame Control 2 Octets */
   /* Frame Control field - see 7.2.1.1 */
+  uint16_t m_Data;
+  uint32_t *m_array;
   uint8_t m_fctrlFrmType;               //!< Frame Control field Bit 0-2    = 0 - Beacon, 1 - Data, 2 - Ack, 3 - Command
   uint8_t m_fctrlSecU;                  //!< Frame Control field Bit 3      = 0 - no AuxSecHdr ,  1 - security enabled AuxSecHdr present
   uint8_t m_fctrlFrmPending;            //!< Frame Control field Bit 4

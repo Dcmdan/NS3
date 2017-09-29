@@ -111,10 +111,6 @@ LrWpanMac::GetTypeId (void)
                      "packet sniffer attached to the device",
                      MakeTraceSourceAccessor (&LrWpanMac::m_promiscSnifferTrace),
                      "ns3::Packet::TracedCallback")
-    .AddTraceSource ("MacStateValue",
-                     "The state of LrWpan Mac",
-                     MakeTraceSourceAccessor (&LrWpanMac::m_lrWpanMacState),
-                     "ns3::TracedValueCallback::LrWpanMacState")
     .AddTraceSource ("MacState",
                      "The state of LrWpan Mac",
                      MakeTraceSourceAccessor (&LrWpanMac::m_macStateLogger),
@@ -245,6 +241,14 @@ LrWpanMac::GetExtendedAddress () const
 {
   NS_LOG_FUNCTION (this);
   return m_selfExt;
+}
+
+void 
+LrWpanMac::McpsDataRequestHelper(McpsDataRequestParams *params, Ptr<Packet> *p){
+  
+  McpsDataRequestParams par = *params;
+  Ptr<Packet> pac = *p;
+  McpsDataRequest(par,pac);
 }
 void
 LrWpanMac::McpsDataRequest (McpsDataRequestParams params, Ptr<Packet> p)

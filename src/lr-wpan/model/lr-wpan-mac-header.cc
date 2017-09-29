@@ -19,7 +19,7 @@
  */
 #include "lr-wpan-mac-header.h"
 #include <ns3/address-utils.h>
-
+#include <ns3/log.h>
 namespace ns3 {
 
 NS_OBJECT_ENSURE_REGISTERED (LrWpanMacHeader);
@@ -496,6 +496,18 @@ LrWpanMacHeader::GetInstanceTypeId (void) const
   return GetTypeId ();
 }
 
+///////////////
+uint16_t
+LrWpanMacHeader::GetData (void){
+  return m_Data ;
+}
+void
+LrWpanMacHeader::SetData (uint16_t data){
+  m_Data = data;
+}
+
+
+//////////////////*/
 void
 LrWpanMacHeader::Print (std::ostream &os) const
 {
@@ -504,7 +516,9 @@ LrWpanMacHeader::Print (std::ostream &os) const
      << ", PAN ID Compress = " << (uint32_t) m_fctrlPanIdComp << ", Frame Vers = " << (uint32_t) m_fctrlFrmVer
      << ", Dst Addrs Mode = " << (uint32_t) m_fctrlDstAddrMode << ", Src Addr Mode = " << (uint32_t) m_fctrlSrcAddrMode;
 
-  os << ", Sequence Num = " << static_cast<uint16_t> (m_SeqNum);
+  os << ", Sequence Num = " << static_cast<uint16_t> (m_SeqNum)
+     << ", Custom Header Type = "  <<  m_Data;
+
 
   switch (m_fctrlDstAddrMode)
     {
@@ -635,7 +649,7 @@ LrWpanMacHeader::GetSerializedSize (void) const
           break;
         }
     }
-  return (size);
+  return (size+2);
 }
 
 
@@ -704,6 +718,7 @@ LrWpanMacHeader::Serialize (Buffer::Iterator start) const
           break;
         }
     }
+   i.WriteHtonU16 (m_Data);
 }
 
 
@@ -784,6 +799,7 @@ LrWpanMacHeader::Deserialize (Buffer::Iterator start)
           break;
         }
     }
+    SetData(i.ReadNtohU16 ());
   return i.GetDistanceFrom (start);
 }
 
