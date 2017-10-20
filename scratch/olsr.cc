@@ -65,6 +65,8 @@
 #include <vector>
 #include <string>
 
+#define M 2
+
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("OlsrHna");
@@ -97,9 +99,6 @@ int main (int argc, char *argv[])
   uint32_t packetSize = 1000; // bytes
   uint32_t numPackets = 1;
   double interval = 1.0; // seconds
-  bool verbose = false;
-  bool assocMethod1 = false;
-  bool assocMethod2 = false;
 
   CommandLine cmd;
 
@@ -108,11 +107,10 @@ int main (int argc, char *argv[])
   cmd.AddValue ("packetSize", "size of application packet sent", packetSize);
   cmd.AddValue ("numPackets", "number of packets generated", numPackets);
   cmd.AddValue ("interval", "interval (seconds) between packets", interval);
-  cmd.AddValue ("verbose", "turn on all WifiNetDevice log components", verbose);
-  cmd.AddValue ("assocMethod1", "Use SetRoutingTableAssociation () method", assocMethod1);
-  cmd.AddValue ("assocMethod2", "Use AddHostNetworkAssociation () method", assocMethod2);
 
   cmd.Parse (argc, argv);
+
+  //LogComponentEnable ("OlsrRoutingProtocol", LOG_LEVEL_DEBUG);
   // Convert to time object
   Time interPacketInterval = Seconds (interval);
 
@@ -125,17 +123,13 @@ int main (int argc, char *argv[])
                       StringValue (phyMode));
 
   NodeContainer olsrNodes;
-  olsrNodes.Create (2);
-
-  NodeContainer csmaNodes;
-  csmaNodes.Create (1);
+  olsrNodes.Create (M*M);
 
   // The below set of helpers will help us to put together the wifi NICs we want
   WifiHelper wifi;
-  if (verbose)
-    {
-      wifi.EnableLogComponents ();  // Turn on all Wifi logging
-    }
+
+  wifi.EnableLogComponents ();  // Turn on all Wifi logging
+
   wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
 
   YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
@@ -149,7 +143,8 @@ int main (int argc, char *argv[])
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
   // The below FixedRssLossModel will cause the rss to be fixed regardless
   // of the distance between the two stations, and the transmit power
-  wifiChannel.AddPropagationLoss ("ns3::FixedRssLossModel","Rss",DoubleValue (rss));
+  //wifiChannel.AddPropagationLoss ("ns3::FixedRssLossModel","Rss",DoubleValue (rss));
+  wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel");
   wifiPhy.SetChannel (wifiChannel.Create ());
 
   // Add a mac and disable rate control
@@ -161,17 +156,14 @@ int main (int argc, char *argv[])
   wifiMac.SetType ("ns3::AdhocWifiMac");
   NetDeviceContainer devices = wifi.Install (wifiPhy, wifiMac, olsrNodes);
 
-  CsmaHelper csma;
-  csma.SetChannelAttribute ("DataRate", DataRateValue (DataRate (5000000)));
-  csma.SetChannelAttribute ("Delay", TimeValue (MilliSeconds (2)));
-  NetDeviceContainer csmaDevices = csma.Install (NodeContainer (csmaNodes.Get (0), olsrNodes.Get (1)));
-
   // Note that with FixedRssLossModel, the positions below are not
   // used for received signal strength.
   MobilityHelper mobility;
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  positionAlloc->Add (Vector (0.0, 0.0, 0.0));
-  positionAlloc->Add (Vector (20.0, 0.0, 0.0));
+  for (uint32_t i = 0; i<M*M; i++ )
+  {
+	  positionAlloc->Add (Vector (20 * (i/M), 20 * (i%M), 0.0));
+  }
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (olsrNodes);
@@ -179,37 +171,28 @@ int main (int argc, char *argv[])
   OlsrHelper olsr;
 
   // Specify Node B's csma device as a non-OLSR device.
-  olsr.ExcludeInterface (olsrNodes.Get (1), 2);
-
-  Ipv4StaticRoutingHelper staticRouting;
+  //olsr.ExcludeInterface (olsrNodes.Get (1), 2);
 
   Ipv4ListRoutingHelper list;
-  list.Add (staticRouting, 0);
   list.Add (olsr, 10);
 
   InternetStackHelper internet_olsr;
   internet_olsr.SetRoutingHelper (list); // has effect on the next Install ()
   internet_olsr.Install (olsrNodes);
 
-  InternetStackHelper internet_csma;
-  internet_csma.Install (csmaNodes);
-
   Ipv4AddressHelper ipv4;
   NS_LOG_INFO ("Assign IP Addresses.");
   ipv4.SetBase ("10.0.0.0", "255.255.255.0");
   ipv4.Assign (devices);
 
-  ipv4.SetBase ("10.0.1.0", "255.255.255.0");
-  ipv4.Assign (csmaDevices);
-
   TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
-  Ptr<Socket> recvSink = Socket::CreateSocket (csmaNodes.Get (0), tid);
+  Ptr<Socket> recvSink = Socket::CreateSocket (olsrNodes.Get (0), tid);
   InetSocketAddress local = InetSocketAddress (Ipv4Address::GetAny (), 80);
   recvSink->Bind (local);
   recvSink->SetRecvCallback (MakeCallback (&ReceivePacket));
 
-  Ptr<Socket> source = Socket::CreateSocket (olsrNodes.Get (0), tid);
-  InetSocketAddress remote = InetSocketAddress (Ipv4Address ("10.0.1.1"), 80);
+  Ptr<Socket> source = Socket::CreateSocket (olsrNodes.Get (M*M-1), tid);
+  InetSocketAddress remote = InetSocketAddress (Ipv4Address ("10.0.0.1"), 80);
   source->Connect (remote);
 
   // Obtain olsr::RoutingProtocol instance of gateway node
@@ -230,28 +213,9 @@ int main (int argc, char *argv[])
         }
     }
 
-  if (assocMethod1)
-    {
-      // Create a special Ipv4StaticRouting instance for RoutingTableAssociation
-      // Even the Ipv4StaticRouting instance added to list may be used
-      Ptr<Ipv4StaticRouting> hnaEntries = Create<Ipv4StaticRouting> ();
-
-      // Add the required routes into the Ipv4StaticRouting Protocol instance
-      // and have the node generate HNA messages for all these routes
-      // which are associated with non-OLSR interfaces specified above.
-      hnaEntries->AddNetworkRouteTo (Ipv4Address ("10.0.1.0"), Ipv4Mask ("255.255.255.0"), uint32_t (2), uint32_t (1));
-      olsrrp_Gw->SetRoutingTableAssociation (hnaEntries);
-    }
-  assocMethod2 = true;
-  if (assocMethod2)
-    {
-      // Specify the required associations directly.
-      olsrrp_Gw->AddHostNetworkAssociation (Ipv4Address ("10.0.1.0"), Ipv4Mask ("255.255.255.0"));
-    }
 
   // Tracing
   wifiPhy.EnablePcap ("olsr-hna", devices);
-  csma.EnablePcap ("olsr-hna", csmaDevices, false);
 
   Simulator::ScheduleWithContext (source->GetNode ()->GetId (),
                                   Seconds (15.0), &GenerateTraffic,

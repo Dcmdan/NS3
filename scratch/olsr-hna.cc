@@ -113,6 +113,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("assocMethod2", "Use AddHostNetworkAssociation () method", assocMethod2);
 
   cmd.Parse (argc, argv);
+  LogComponentEnable ("OlsrRoutingProtocol", LOG_LEVEL_DEBUG);
   // Convert to time object
   Time interPacketInterval = Seconds (interval);
 
