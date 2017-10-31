@@ -28,7 +28,7 @@ namespace ns3 {
 
 IOlsrHelper::IOlsrHelper ()
 {
-  m_agentFactory.SetTypeId ("ns3::olsr::RoutingProtocol");
+  m_agentFactory.SetTypeId ("ns3::iolsr::RoutingProtocol");
 }
 
 IOlsrHelper::IOlsrHelper (const IOlsrHelper &o)
@@ -64,7 +64,7 @@ IOlsrHelper::ExcludeInterface (Ptr<Node> node, uint32_t interface)
 Ptr<Ipv4RoutingProtocol>
 IOlsrHelper::Create (Ptr<Node> node) const
 {
-  Ptr<olsr::RoutingProtocol> agent = m_agentFactory.Create<olsr::RoutingProtocol> ();
+  Ptr<iolsr::RoutingProtocol> agent = m_agentFactory.Create<iolsr::RoutingProtocol> ();
 
   std::map<Ptr<Node>, std::set<uint32_t> >::const_iterator it = m_interfaceExclusions.find (node);
 
@@ -95,7 +95,7 @@ IOlsrHelper::AssignStreams (NodeContainer c, int64_t stream)
       NS_ASSERT_MSG (ipv4, "Ipv4 not installed on node");
       Ptr<Ipv4RoutingProtocol> proto = ipv4->GetRoutingProtocol ();
       NS_ASSERT_MSG (proto, "Ipv4 routing not installed on node");
-      Ptr<olsr::RoutingProtocol> olsr = DynamicCast<olsr::RoutingProtocol> (proto);
+      Ptr<iolsr::RoutingProtocol> olsr = DynamicCast<iolsr::RoutingProtocol> (proto);
       if (olsr)
         {
           currentStream += olsr->AssignStreams (currentStream);
@@ -107,11 +107,11 @@ IOlsrHelper::AssignStreams (NodeContainer c, int64_t stream)
         {
           int16_t priority;
           Ptr<Ipv4RoutingProtocol> listProto;
-          Ptr<olsr::RoutingProtocol> listOlsr;
+          Ptr<iolsr::RoutingProtocol> listOlsr;
           for (uint32_t i = 0; i < list->GetNRoutingProtocols (); i++)
             {
               listProto = list->GetRoutingProtocol (i, priority);
-              listOlsr = DynamicCast<olsr::RoutingProtocol> (listProto);
+              listOlsr = DynamicCast<iolsr::RoutingProtocol> (listProto);
               if (listOlsr)
                 {
                   currentStream += listOlsr->AssignStreams (currentStream);

@@ -140,7 +140,7 @@
 
 namespace ns3 {
 
-NS_LOG_COMPONENT_DEFINE ("OlsrRoutingProtocol");
+NS_LOG_COMPONENT_DEFINE ("IOlsrRoutingProtocol");
 
 namespace iolsr {
 

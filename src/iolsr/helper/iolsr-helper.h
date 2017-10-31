@@ -102,7 +102,7 @@ private:
    * \brief Assignment operator declared private and not implemented to disallow
    * assignment and prevent the compiler from happily inserting its own.
    */
-  OlsrHelper &operator = (const OlsrHelper &);
+  IOlsrHelper &operator = (const IOlsrHelper &);
   ObjectFactory m_agentFactory; //!< Object factory
 
   std::map< Ptr<Node>, std::set<uint32_t> > m_interfaceExclusions; //!< container of interfaces excluded from OLSR operations

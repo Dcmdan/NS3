@@ -79,7 +79,7 @@ class RoutingProtocol;
 class RoutingProtocol : public Ipv4RoutingProtocol
 {
 public:
-  friend class ::OlsrMprTestCase;
+  friend class ::IOlsrMprTestCase;
 
   /**
    * \brief Get the type ID.
