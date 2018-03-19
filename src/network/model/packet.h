@@ -228,6 +228,8 @@ class Packet : public SimpleRefCount<Packet>
 {
 public:
 
+	double sendtime;
+
   /**
    * \brief Create an empty packet with a new uid (as returned
    * by getUid).

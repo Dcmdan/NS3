@@ -51,11 +51,11 @@ main (int argc, char **argv)
   sem->SetNode (node);
   node->AggregateObject (esCont);
 
-  es->SetInitialEnergy(31752);
+  es->SetInitialEnergy(7768);
   Time now = Simulator::Now ();
 
-  sem->SetCurrentA (1);
-  now += Seconds (9000);
+  sem->SetCurrentA (0.5);
+  now += Seconds (3000);
   /*for (int i = 0; i < 33; i++)
   {
 	  Simulator::Schedule (now,

@@ -23,7 +23,7 @@ LiIonBatteryModel::GetTypeId (void)
     .AddConstructor<LiIonBatteryModel> ()
     .AddAttribute ("LiIonBatteryModelInitialEnergyJ",
                    "Initial energy stored in basic energy source.",
-                   DoubleValue (31752.0),  // in Joules
+                   DoubleValue (7777.0),  // in Joules
                    MakeDoubleAccessor (&LiIonBatteryModel::SetInitialEnergy,
                                        &LiIonBatteryModel::GetInitialEnergy),
                    MakeDoubleChecker<double> ())
@@ -44,48 +44,48 @@ LiIonBatteryModel::GetTypeId (void)
                    MakeDoubleChecker<double> ())
     .AddAttribute ("InitialCellVoltage",
                    "Initial (maximum) voltage of the cell (fully charged).",
-                   DoubleValue (4.05), // in Volts
+                   DoubleValue (4.00), // in Volts
                    MakeDoubleAccessor (&LiIonBatteryModel::SetInitialSupplyVoltage,
                                        &LiIonBatteryModel::GetSupplyVoltage),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("NominalCellVoltage",
                    "Nominal voltage of the cell.",
-                   DoubleValue (3.6),  // in Volts
+                   DoubleValue (3.5),  // in Volts
                    MakeDoubleAccessor (&LiIonBatteryModel::m_eNom),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("ExpCellVoltage",
                    "Cell voltage at the end of the exponential zone.",
-                   DoubleValue (3.6),  // in Volts
+                   DoubleValue (3.7),  // in Volts
                    MakeDoubleAccessor (&LiIonBatteryModel::m_eExp),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("RatedCapacity",
                    "Rated capacity of the cell.",
-                   DoubleValue (2.45),   // in Ah
+                   DoubleValue (0.56),   // in Ah
                    MakeDoubleAccessor (&LiIonBatteryModel::m_qRated),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("NomCapacity",
                    "Cell capacity at the end of the nominal zone.",
-                   DoubleValue (1.1),  // in Ah
+                   DoubleValue (0.18),  // in Ah
                    MakeDoubleAccessor (&LiIonBatteryModel::m_qNom),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("ExpCapacity",
                    "Cell Capacity at the end of the exponential zone.",
-                   DoubleValue (1.2),  // in Ah
+                   DoubleValue (0.2),  // in Ah
                    MakeDoubleAccessor (&LiIonBatteryModel::m_qExp),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("InternalResistance",
                    "Internal resistance of the cell",
-                   DoubleValue (0.083),  // in Ohms
+                   DoubleValue (0.183),  // in Ohms
                    MakeDoubleAccessor (&LiIonBatteryModel::m_internalResistance),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("TypCurrent",
                    "Typical discharge current used to fit the curves",
-                   DoubleValue (2.33), // in A
+                   DoubleValue (0), // in A
                    MakeDoubleAccessor (&LiIonBatteryModel::m_typCurrent),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("ThresholdVoltage",
                    "Minimum threshold voltage to consider the battery depleted.",
-                   DoubleValue (3.3), // in Volts
+                   DoubleValue (2.8), // in Volts
                    MakeDoubleAccessor (&LiIonBatteryModel::m_minVoltTh),
                    MakeDoubleChecker<double> ())
     .AddAttribute ("PeriodicEnergyUpdateInterval",

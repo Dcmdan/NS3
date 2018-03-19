@@ -272,6 +272,7 @@ void OnOffApplication::SendPacket ()
 
   NS_ASSERT (m_sendEvent.IsExpired ());
   Ptr<Packet> packet = Create<Packet> (m_pktSize);
+  packet->sendtime = Simulator::Now ().GetSeconds ();
   m_txTrace (packet);
   m_socket->Send (packet);
   m_totBytes += m_pktSize;

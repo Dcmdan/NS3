@@ -74,9 +74,18 @@
 #include "ns3/wifi-module.h"
 #include "ns3/aodv-module.h"
 #include "ns3/olsr-module.h"
+#include "ns3/iolsr-module.h"
 #include "ns3/dsdv-module.h"
 #include "ns3/dsr-module.h"
 #include "ns3/applications-module.h"
+#include "ns3/flow-monitor-module.h"
+#include "ns3/energy-module.h"
+#include "ns3/li-ion-battery-model.h"
+#include "ns3/buildings-module.h"
+#include "ns3/wifi-radio-energy-model.h"
+#include "ns3/simple-device-energy-model.h"
+
+#define nWifis 50
 
 using namespace ns3;
 using namespace dsr;
@@ -95,12 +104,15 @@ public:
 
 private:
   Ptr<Socket> SetupPacketReceive (Ipv4Address addr, Ptr<Node> node);
+  Ptr<Socket> SetupPacketSend (Ipv4Address addr, Ptr<Node> node);
   void ReceivePacket (Ptr<Socket> socket);
+  void SendPacket (Ptr<Socket> socket, uint32_t);
   void CheckThroughput ();
 
   uint32_t port;
   uint32_t bytesTotal;
   uint32_t packetsReceived;
+  uint32_t packetsSended;
 
   std::string m_CSVfileName;
   int m_nSinks;
@@ -114,9 +126,10 @@ RoutingExperiment::RoutingExperiment ()
   : port (9),
     bytesTotal (0),
     packetsReceived (0),
+	 packetsSended (0),
     m_CSVfileName ("manet-routing.output.csv"),
     m_traceMobility (false),
-    m_protocol (2) // AODV
+    m_protocol (0) // AODV
 {
 }
 
@@ -153,6 +166,14 @@ RoutingExperiment::ReceivePacket (Ptr<Socket> socket)
 }
 
 void
+RoutingExperiment::SendPacket (Ptr<Socket> socket, uint32_t a)
+{
+	std::ostringstream oss;
+	packetsSended += 1;
+	std::cout << "Sended one packet, " << packetsSended << "in total" << std::endl;
+}
+
+void
 RoutingExperiment::CheckThroughput ()
 {
   double kbs = (bytesTotal * 8.0) / 1000;
@@ -181,7 +202,16 @@ RoutingExperiment::SetupPacketReceive (Ipv4Address addr, Ptr<Node> node)
   InetSocketAddress local = InetSocketAddress (addr, port);
   sink->Bind (local);
   sink->SetRecvCallback (MakeCallback (&RoutingExperiment::ReceivePacket, this));
-
+  return sink;
+}
+Ptr<Socket>
+RoutingExperiment::SetupPacketSend (Ipv4Address addr, Ptr<Node> node)
+{
+  TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
+  Ptr<Socket> sink = Socket::CreateSocket (node, tid);
+  InetSocketAddress local = InetSocketAddress (addr, port);
+  sink->Bind (local);
+  sink->SetSendCallback (MakeCallback (&RoutingExperiment::SendPacket, this));
   return sink;
 }
 
@@ -193,7 +223,8 @@ RoutingExperiment::CommandSetup (int argc, char **argv)
   cmd.AddValue ("traceMobility", "Enable mobility tracing", m_traceMobility);
   cmd.AddValue ("protocol", "1=OLSR;2=AODV;3=DSDV;4=DSR", m_protocol);
   cmd.Parse (argc, argv);
-  LogComponentEnable ("OlsrRoutingProtocol", LOG_LEVEL_DEBUG);
+  //LogComponentEnable ("OlsrRoutingProtocol", LOG_LEVEL_DEBUG);
+  //LogComponentEnable ("OnOffApplication", LOG_LEVEL_INFO);
   return m_CSVfileName;
 }
 
@@ -221,6 +252,21 @@ main (int argc, char *argv[])
 }
 
 void
+RemainingEnergy (std::string context, double oldValue, double remainingEnergy)
+{
+	if(remainingEnergy == 0)
+	{
+		std::cout << "At " << Simulator::Now ().GetSeconds () << "s Node " << context << " died.";
+		//NS_LOG_UNCOND ("At " << Simulator::Now ().GetSeconds () << "s Node " << context << " died.");
+	}
+}
+void
+TotalEnergy (std::string context, double oldValue, double totalEnergy)
+{
+	std::cout << Simulator::Now ().GetSeconds () << "s Node " << context << " Total energy consumed by radio = " << totalEnergy << "J";
+}
+
+void
 RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
 {
   Packet::EnablePrinting ();
@@ -228,13 +274,11 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
   m_txp = txp;
   m_CSVfileName = CSVfileName;
 
-  int nWifis = 50;
-
   double TotalTime = 200.0;
   std::string rate ("2048bps");
   std::string phyMode ("DsssRate11Mbps");
   std::string tr_name ("manet-routing-compare");
-  int nodeSpeed = 20; //in m/s
+  int nodeSpeed = 5; //in m/s
   int nodePause = 0; //in s
   m_protocolName = "protocol";
 
@@ -252,9 +296,11 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
   wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
 
   YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
+  wifiPhy.Set ("RxGain", DoubleValue (3) );
+  wifiPhy.Set ("TxGain", DoubleValue (3) );
   YansWifiChannelHelper wifiChannel;
   wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel");
+  wifiChannel.AddPropagationLoss ("ns3::LogDistancePropagationLossModel");
   wifiPhy.SetChannel (wifiChannel.Create ());
 
   // Add a mac and disable rate control
@@ -274,8 +320,8 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
 
   ObjectFactory pos;
   pos.SetTypeId ("ns3::RandomRectanglePositionAllocator");
-  pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=300.0]"));
-  pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
+  pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=500.0]"));
+  pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=500.0]"));
 
   Ptr<PositionAllocator> taPositionAlloc = pos.Create ()->GetObject<PositionAllocator> ();
   streamIndex += taPositionAlloc->AssignStreams (streamIndex);
@@ -294,6 +340,7 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
 
   AodvHelper aodv;
   OlsrHelper olsr;
+  IOlsrHelper iolsr;
   DsdvHelper dsdv;
   DsrHelper dsr;
   DsrMainHelper dsrMain;
@@ -302,6 +349,11 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
 
   switch (m_protocol)
     {
+    case 0:
+      list.Add (iolsr, 100);
+      m_protocolName = "IOLSR";
+      NS_LOG_INFO ("Protocol: IOLSR");
+      break;
     case 1:
       list.Add (olsr, 100);
       m_protocolName = "OLSR";
@@ -343,6 +395,40 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
   Ipv4InterfaceContainer adhocInterfaces;
   adhocInterfaces = addressAdhoc.Assign (adhocDevices);
 
+  LiIonBatteryModelHelper basicSourceHelper;
+  // configure energy source
+  basicSourceHelper.Set ("LiIonBatteryModelInitialEnergyJ", DoubleValue (31752)); //1W-h
+  // install source
+  EnergySourceContainer sources = basicSourceHelper.Install (adhocNodes);
+  /* device energy model */
+  WifiRadioEnergyModelHelper radioEnergyHelper;
+  // configure radio energy model
+  radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.380));
+  radioEnergyHelper.Set ("RxCurrentA", DoubleValue (0.313));
+  radioEnergyHelper.Set ("IdleCurrentA", DoubleValue (0.273));
+  // install device model
+  DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (adhocDevices, sources);
+  int index = 0;
+  Ptr<LiIonBatteryModel> basicSourcePtr[nWifis];
+  for(NodeContainer::Iterator j= adhocNodes.Begin(); j!= adhocNodes.End(); ++j)
+    {
+
+      std::string context = static_cast<std::ostringstream*>( &(std::ostringstream() << index) )->str();
+      basicSourcePtr[index] = DynamicCast<LiIonBatteryModel> (sources.Get (index));
+      basicSourcePtr[index]->SetInitialEnergy(15000 + index * ((31752 - 15000) / nWifis));
+      basicSourcePtr[index]->TraceConnect ("RemainingEnergy", context, MakeCallback (&RemainingEnergy));
+      // device energy model
+      Ptr<DeviceEnergyModel> basicRadioModelPtr =
+    		  basicSourcePtr[index]->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+
+      NS_ASSERT (basicSourcePtr[index] != NULL);
+      basicSourcePtr[index]->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
+      //nodes.Get (index)->AggregateObject (sources.Get (index));
+      index++;
+  }
+
+
+
   OnOffHelper onoff1 ("ns3::UdpSocketFactory",Address ());
   onoff1.SetAttribute ("OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1.0]"));
   onoff1.SetAttribute ("OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.0]"));
@@ -350,6 +436,7 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
   for (int i = 0; i < nSinks; i++)
     {
       Ptr<Socket> sink = SetupPacketReceive (adhocInterfaces.GetAddress (i), adhocNodes.Get (i));
+      Ptr<Socket> sink2 = SetupPacketSend (adhocInterfaces.GetAddress (i + nSinks), adhocNodes.Get (i + nSinks));
 
       AddressValue remoteAddress (InetSocketAddress (adhocInterfaces.GetAddress (i), port));
       onoff1.SetAttribute ("Remote", remoteAddress);
@@ -376,28 +463,88 @@ RoutingExperiment::Run (int nSinks, double txp, std::string CSVfileName)
   ss4 << rate;
   std::string sRate = ss4.str ();
 
-  //NS_LOG_INFO ("Configure Tracing.");
-  //tr_name = tr_name + "_" + m_protocolName +"_" + nodes + "nodes_" + sNodeSpeed + "speed_" + sNodePause + "pause_" + sRate + "rate";
-
-  //AsciiTraceHelper ascii;
-  //Ptr<OutputStreamWrapper> osw = ascii.CreateFileStream ( (tr_name + ".tr").c_str());
-  //wifiPhy.EnableAsciiAll (osw);
   AsciiTraceHelper ascii;
   MobilityHelper::EnableAsciiAll (ascii.CreateFileStream (tr_name + ".mob"));
-
-  //Ptr<FlowMonitor> flowmon;
-  //FlowMonitorHelper flowmonHelper;
-  //flowmon = flowmonHelper.InstallAll ();
-
 
   NS_LOG_INFO ("Run Simulation.");
 
   CheckThroughput ();
 
-  Simulator::Stop (Seconds (TotalTime));
-  Simulator::Run ();
+  uint32_t rxPacketsum = 0;
+     double Delaysum = 0;
+     uint32_t txPacketsum = 0;
+     uint32_t txBytessum = 0;
+     uint32_t rxBytessum = 0;
+     uint32_t txTimeFirst = 0;
+     uint32_t rxTimeLast = 0;
+     uint32_t lostPacketssum = 0;
+     double lastdelaysum = 0;
+     double jittersum = 0;
 
-  //flowmon->SerializeToXmlFile ((tr_name + ".flowmon").c_str(), false, false);
+     FlowMonitorHelper flowmon;
+     Ptr<FlowMonitor> monitor = flowmon.InstallAll();
+
+     Simulator::Stop (Seconds (TotalTime));
+     Simulator::Run ();
+
+     monitor->CheckForLostPackets ();
+
+     Ptr<Ipv4FlowClassifier> classifier = DynamicCast<Ipv4FlowClassifier> (flowmon.GetClassifier ());
+     std::map<FlowId, FlowMonitor::FlowStats> stats = monitor->GetFlowStats ();
+
+     for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator i = stats.begin (); i != stats.end (); ++i)
+     {
+         rxPacketsum += i->second.rxPackets;
+         txPacketsum += i->second.txPackets;
+         txBytessum += i->second.txBytes;
+         rxBytessum += i->second.rxBytes;
+         Delaysum += i->second.delaySum.GetSeconds();
+         lostPacketssum += i->second.lostPackets;
+         txTimeFirst += i->second.timeFirstTxPacket.GetSeconds();
+         rxTimeLast += i->second.timeLastRxPacket.GetSeconds();
+         jittersum += i->second.jitterSum.GetSeconds();
+         lastdelaysum += i->second.lastDelay.GetSeconds();
+
+     }
+     index = 0;
+     double remainEnergysum = 0;
+     double remainEnergy[nWifis];
+     double consumedEnergysum = 0;
+     for(NodeContainer::Iterator j= adhocNodes.Begin(); j!= adhocNodes.End(); ++j)
+       {
+    	 remainEnergy[index] = basicSourcePtr[index]->GetRemainingEnergy();
+    	 remainEnergysum += remainEnergy[index];
+    	 consumedEnergysum += basicSourcePtr[index]->GetInitialEnergy() - remainEnergy[index];
+       index++;
+     }
+    for (int i = 0 ; i < nWifis - 1; i++)
+    {
+    	for (int j = i + 1; j < nWifis; j++)
+    	{
+    		if (remainEnergy[i] > remainEnergy[j])
+    		{
+    			double t = remainEnergy[i];
+    			remainEnergy[i] = remainEnergy[j];
+    			remainEnergy[j] = t;
+    		}
+    	}
+    }
+
+     uint64_t timeDiff = (rxTimeLast - txTimeFirst);
+     std::cout << "\n\n";
+     std::cout << "  Total Tx Packets: " << txPacketsum << "\n";
+     std::cout << "  Total Rx Packets: " << rxPacketsum << "\n";
+     std::cout << "  Total Packets Lost: " << lostPacketssum << "\n";
+     std::cout << "  Average Delay: " << Delaysum / rxPacketsum * 1000 << " ms\n";
+     std::cout << "  Throughput: " << ((rxBytessum * 8.0) / timeDiff)/1024<<" Kbps"<<"\n";
+     std::cout << "  Packets Delivery Ratio: " << (((txPacketsum - lostPacketssum) * 100) /txPacketsum) << "%" << "\n";
+     std::cout << "  Total Jitter: " << jittersum * 1000<< " ms\n";
+     std::cout << "  Total Delay: " << lastdelaysum * 1000 << " ms\n";
+     std::cout << "  Average Remaining Energy: " << remainEnergysum / nWifis << " J\n";
+     std::cout << "  Max Remaining Energy: " << remainEnergy[nWifis - 1] << " J\n";
+     std::cout << "  Min Remaining Energy: " << remainEnergy[0] << " J\n";
+     std::cout << "  Median Remaining Energy: " << remainEnergy[(int)(nWifis / 2)] << " J\n";
+     std::cout << "  Average Consumed Energy: " << consumedEnergysum / nWifis << " J\n";
 
   Simulator::Destroy ();
 }

@@ -7,13 +7,18 @@
 #include "ns3/iolsr-routing-protocol.h"
 #include "ns3/iolsr-helper.h"
 #include "ns3/applications-module.h"
+#include "ns3/energy-module.h"
+#include "ns3/li-ion-battery-model.h"
+#include "ns3/buildings-module.h"
+#include "ns3/wifi-radio-energy-model.h"
+#include "ns3/simple-device-energy-model.h"
 
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include <string>
 
-#define M 5
+#define M 4
 
 using namespace ns3;
 
@@ -37,9 +42,9 @@ int main (int argc, char *argv[])
   CommandLine cmd;
   cmd.Parse (argc, argv);
 
-  //LogComponentEnable ("OlsrRoutingProtocol", LOG_LEVEL_DEBUG);
-  LogComponentEnable ("PacketSink", LOG_LEVEL_ALL);
-  LogComponentEnable ("AdHocExample", LOG_LEVEL_ALL);
+  LogComponentEnable ("IOlsrRoutingProtocol", LOG_LEVEL_DEBUG);
+  //LogComponentEnable ("PacketSink", LOG_LEVEL_ALL);
+  //LogComponentEnable ("AdHocExample", LOG_LEVEL_ALL);
   LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
   LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
 
@@ -63,7 +68,7 @@ int main (int argc, char *argv[])
   YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
   // This is one parameter that matters when using FixedRssLossModel
   // set it to zero; otherwise, gain will be added
-  wifiPhy.Set ("RxGain", DoubleValue (0) );
+  wifiPhy.Set ("RxGain", DoubleValue (1) );
   // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
   wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
 
@@ -85,7 +90,8 @@ int main (int argc, char *argv[])
   Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   for (uint32_t i = 0; i<M*M; i++ )
   {
-	  positionAlloc->Add (Vector (80 * (i%M) + 80 * (i/M), 80 * (i%M), 0.0));
+	  int edge = 80;
+	  positionAlloc->Add (Vector (edge * (i%M) + edge * (i/M), edge * (i%M), 0.0));
   }
   mobility.SetPositionAllocator (positionAlloc);
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
@@ -106,6 +112,35 @@ int main (int argc, char *argv[])
   addressAdhoc.SetBase ("10.1.1.0", "255.255.255.0");
   Ipv4InterfaceContainer adhocInterfaces;
   adhocInterfaces = addressAdhoc.Assign (devices);
+
+  LiIonBatteryModelHelper basicSourceHelper;
+  // configure energy source
+  basicSourceHelper.Set ("LiIonBatteryModelInitialEnergyJ", DoubleValue (31752)); //1W-h
+  // install source
+  EnergySourceContainer sources = basicSourceHelper.Install (olsrNodes);
+  /* device energy model */
+  WifiRadioEnergyModelHelper radioEnergyHelper;
+  // configure radio energy model
+  radioEnergyHelper.Set ("TxCurrentA", DoubleValue (0.380));
+  radioEnergyHelper.Set ("RxCurrentA", DoubleValue (0.313));
+  radioEnergyHelper.Set ("IdleCurrentA", DoubleValue (0.273));
+  // install device model
+  DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (devices, sources);
+  int index = 0;
+  Ptr<LiIonBatteryModel> basicSourcePtr[M * M];
+  for(NodeContainer::Iterator j= olsrNodes.Begin(); j!= olsrNodes.End(); ++j)
+    {
+
+      std::string context = static_cast<std::ostringstream*>( &(std::ostringstream() << index) )->str();
+      basicSourcePtr[index] = DynamicCast<LiIonBatteryModel> (sources.Get (index));
+      // device energy model
+      Ptr<DeviceEnergyModel> basicRadioModelPtr =
+    		  basicSourcePtr[index]->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+
+      NS_ASSERT (basicSourcePtr[index] != NULL);
+      //nodes.Get (index)->AggregateObject (sources.Get (index));
+      index++;
+  }
 
   NS_LOG_INFO ("Create Applications.");
 

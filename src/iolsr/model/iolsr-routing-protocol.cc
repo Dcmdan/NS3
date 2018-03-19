@@ -47,7 +47,9 @@
 #include "ns3/enum.h"
 #include "ns3/trace-source-accessor.h"
 #include "ns3/ipv4-header.h"
-
+#include "ns3/wifi-net-device.h"
+#include "ns3/mobility-model.h"
+#include "ns3/energy-module.h"
 /********** Useful macros **********/
 
 ///
@@ -690,7 +692,11 @@ RoutingProtocol::MprComputation ()
       }
     os << "]";
     NS_LOG_DEBUG ("N2: " << os.str ());
+    Ptr<Object> object = m_ipv4->GetObject<Node> ();
+    Ptr<EnergySourceContainer> model = object->GetObject<EnergySourceContainer> ();
+    NS_LOG_DEBUG ("Energy: " << model->Get(0)->GetEnergyFraction());
   }
+
 #endif  //NS3_LOG_ENABLE
 
   // 1. Start with an MPR set made of all members of N with
@@ -1645,7 +1651,10 @@ RoutingProtocol::SendHello ()
   msg.SetHopCount (0);
   msg.SetMessageSequenceNumber (GetMessageSequenceNumber ());
   iolsr::MessageHeader::Hello &hello = msg.GetHello ();
-
+  Ptr<Object> object = m_ipv4->GetObject<Node> ();
+  Ptr<EnergySourceContainer> model = object->GetObject<EnergySourceContainer> ();
+  if (model->GetN() == 1)
+	  m_willingness = (uint8_t)(7 * model->Get(0)->GetEnergyFraction());
   hello.SetHTime (m_helloInterval);
   hello.willingness = m_willingness;
 

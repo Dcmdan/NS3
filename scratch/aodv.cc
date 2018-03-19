@@ -1,220 +1,131 @@
-/* -*- Mode:C++; c-file-style:"gnu"; indent-tabs-mode:nil; -*- */
-/*
- * Copyright (c) 2009 IITP RAS
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation;
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
- *
- * This is an example script for AODV manet routing protocol. 
- *
- * Authors: Pavel Boyko <boyko@iitp.ru>
- */
-
-#include "ns3/aodv-module.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
-#include "ns3/internet-module.h"
 #include "ns3/mobility-module.h"
-#include "ns3/point-to-point-module.h"
-#include "ns3/wifi-module.h" 
-#include "ns3/v4ping-helper.h"
+#include "ns3/config-store-module.h"
+#include "ns3/wifi-module.h"
+#include "ns3/internet-module.h"
+#include "ns3/aodv-module.h"
+#include "ns3/applications-module.h"
+
 #include <iostream>
-#include <cmath>
+#include <fstream>
+#include <vector>
+#include <string>
+
+#define M 5
 
 using namespace ns3;
 
-/**
- * \brief Test script.
- * 
- * This script creates 1-dimensional grid topology and then ping last node from the first one:
- * 
- * [10.0.0.1] <-- step --> [10.0.0.2] <-- step --> [10.0.0.3] <-- step --> [10.0.0.4]
- * 
- * ping 10.0.0.4
- */
-class AodvExample 
+NS_LOG_COMPONENT_DEFINE ("AdHocExample");
+
+Ptr<Socket>
+SetupPacketReceive (Ipv4Address addr, Ptr<Node> node)
 {
-public:
-  AodvExample ();
-  /// Configure script parameters, \return true on successful configuration
-  bool Configure (int argc, char **argv);
-  /// Run simulation
-  void Run ();
-  /// Report results
-  void Report (std::ostream & os);
-
-private:
-
-  // parameters
-  /// Number of nodes
-  uint32_t size;
-  /// Distance between nodes, meters
-  double step;
-  /// Simulation time, seconds
-  double totalTime;
-  /// Write per-device PCAP traces if true
-  bool pcap;
-  /// Print routes if true
-  bool printRoutes;
-
-  // network
-  NodeContainer nodes;
-  NetDeviceContainer devices;
-  Ipv4InterfaceContainer interfaces;
-
-private:
-  void CreateNodes ();
-  void CreateDevices ();
-  void InstallInternetStack ();
-  void InstallApplications ();
-};
-
-int main (int argc, char **argv)
-{
-  AodvExample test;
-  if (!test.Configure (argc, argv))
-    NS_FATAL_ERROR ("Configuration failed. Aborted.");
-
-  test.Run ();
-  test.Report (std::cout);
-  return 0;
+  TypeId tid = TypeId::LookupByName ("ns3::UdpSocketFactory");
+  Ptr<Socket> sink = Socket::CreateSocket (node, tid);
+  InetSocketAddress local = InetSocketAddress (addr, 80);
+  sink->Bind (local);
+  return sink;
 }
 
-//-----------------------------------------------------------------------------
-AodvExample::AodvExample () :
-  size (10),
-  step (100),
-  totalTime (10),
-  pcap (true),
-  printRoutes (true)
+int main (int argc, char *argv[])
 {
-}
+  double simtime = 100.0;
+  std::string phyMode ("DsssRate11Mbps");
 
-bool
-AodvExample::Configure (int argc, char **argv)
-{
-  // Enable AODV logs by default. Comment this if too noisy
-  // LogComponentEnable("AodvRoutingProtocol", LOG_LEVEL_ALL);
-
-  SeedManager::SetSeed (12345);
   CommandLine cmd;
-
-  cmd.AddValue ("pcap", "Write PCAP traces.", pcap);
-  cmd.AddValue ("printRoutes", "Print routing table dumps.", printRoutes);
-  cmd.AddValue ("size", "Number of nodes.", size);
-  cmd.AddValue ("time", "Simulation time, s.", totalTime);
-  cmd.AddValue ("step", "Grid step, m", step);
-
   cmd.Parse (argc, argv);
-  return true;
-}
 
-void
-AodvExample::Run ()
-{
-//  Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", UintegerValue (1)); // enable rts cts all the time.
-  CreateNodes ();
-  CreateDevices ();
-  InstallInternetStack ();
-  InstallApplications ();
+  LogComponentEnable ("IOlsrRoutingProtocol", LOG_LEVEL_DEBUG);
+  LogComponentEnable ("PacketSink", LOG_LEVEL_ALL);
+  LogComponentEnable ("AdHocExample", LOG_LEVEL_ALL);
+  //LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
+  //LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
 
-  std::cout << "Starting simulation for " << totalTime << " s ...\n";
+  // disable fragmentation for frames below 2200 bytes
+  Config::SetDefault ("ns3::WifiRemoteStationManager::FragmentationThreshold", StringValue ("2200"));
+  // turn off RTS/CTS for frames below 2200 bytes
+  Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2200"));
+  // Fix non-unicast data rate to be the same as that of unicast
+  Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode",
+                      StringValue (phyMode));
 
-  Simulator::Stop (Seconds (totalTime));
+  NodeContainer olsrNodes;
+  olsrNodes.Create (M*M);
+  // The below set of helpers will help us to put together the wifi NICs we want
+  WifiHelper wifi;
+
+  //wifi.EnableLogComponents ();  // Turn on all Wifi logging
+
+  wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
+
+  YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
+  // This is one parameter that matters when using FixedRssLossModel
+  // set it to zero; otherwise, gain will be added
+  wifiPhy.Set ("RxGain", DoubleValue (0) );
+  // ns-3 supports RadioTap and Prism tracing extensions for 802.11b
+  wifiPhy.SetPcapDataLinkType (YansWifiPhyHelper::DLT_IEEE802_11_RADIO);
+
+  YansWifiChannelHelper wifiChannel;
+  wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+  wifiChannel.AddPropagationLoss ("ns3::LogDistancePropagationLossModel");
+  wifiPhy.SetChannel (wifiChannel.Create ());
+
+  // Add a mac and disable rate control
+  WifiMacHelper wifiMac;
+  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
+                                "DataMode",StringValue (phyMode),
+                                "ControlMode",StringValue (phyMode));
+  // Set it to adhoc mode
+  wifiMac.SetType ("ns3::AdhocWifiMac", "Slot", StringValue ("16us"));
+  NetDeviceContainer devices = wifi.Install (wifiPhy, wifiMac, olsrNodes);
+
+  MobilityHelper mobility;
+  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+  for (uint32_t i = 0; i<M*M; i++ )
+  {
+	  positionAlloc->Add (Vector (80 * (i%M) + 80 * (i/M), 80 * (i%M), 0.0));
+  }
+  mobility.SetPositionAllocator (positionAlloc);
+  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  mobility.Install (olsrNodes);
+
+  AodvHelper iolsr;
+  Ipv4ListRoutingHelper list;
+  InternetStackHelper internet_olsr;
+
+  list.Add (iolsr, 10);
+  internet_olsr.SetRoutingHelper (list); // has effect on the next Install ()
+  internet_olsr.Install (olsrNodes);
+
+  NS_LOG_INFO ("Assign IP Addresses.");
+
+  Ipv4AddressHelper ipv4;
+  Ipv4AddressHelper addressAdhoc;
+  addressAdhoc.SetBase ("10.1.1.0", "255.255.255.0");
+  Ipv4InterfaceContainer adhocInterfaces;
+  adhocInterfaces = addressAdhoc.Assign (devices);
+
+  NS_LOG_INFO ("Create Applications.");
+
+  UdpEchoServerHelper echoServer (28);
+
+  ApplicationContainer serverApps = echoServer.Install (olsrNodes.Get (0));
+  serverApps.Start (Seconds (11.5));
+  serverApps.Stop (Seconds (simtime));
+
+  UdpEchoClientHelper echoClient (adhocInterfaces.GetAddress (0), 28);
+  echoClient.SetAttribute ("MaxPackets", UintegerValue (100));
+  echoClient.SetAttribute ("Interval", TimeValue (Seconds (1.0)));
+  echoClient.SetAttribute ("PacketSize", UintegerValue (1024*2));
+
+  ApplicationContainer clientApps = echoClient.Install (olsrNodes.Get (M*M-1));
+  clientApps.Start (Seconds (12.5));
+  clientApps.Stop (Seconds (simtime));
+
+  Simulator::Stop (Seconds (simtime));
   Simulator::Run ();
   Simulator::Destroy ();
+
+  return 0;
 }
-
-void
-AodvExample::Report (std::ostream &)
-{ 
-}
-
-void
-AodvExample::CreateNodes ()
-{
-  std::cout << "Creating " << (unsigned)size << " nodes " << step << " m apart.\n";
-  nodes.Create (size);
-  // Name nodes
-  for (uint32_t i = 0; i < size; ++i)
-    {
-      std::ostringstream os;
-      os << "node-" << i;
-      Names::Add (os.str (), nodes.Get (i));
-    }
-  // Create static grid
-  MobilityHelper mobility;
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (0.0),
-                                 "MinY", DoubleValue (0.0),
-                                 "DeltaX", DoubleValue (step),
-                                 "DeltaY", DoubleValue (0),
-                                 "GridWidth", UintegerValue (size),
-                                 "LayoutType", StringValue ("RowFirst"));
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (nodes);
-}
-
-void
-AodvExample::CreateDevices ()
-{
-  WifiMacHelper wifiMac;
-  wifiMac.SetType ("ns3::AdhocWifiMac");
-  YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
-  YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default ();
-  wifiPhy.SetChannel (wifiChannel.Create ());
-  WifiHelper wifi;
-  wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue ("OfdmRate6Mbps"), "RtsCtsThreshold", UintegerValue (0));
-  devices = wifi.Install (wifiPhy, wifiMac, nodes); 
-
-  if (pcap)
-    {
-      wifiPhy.EnablePcapAll (std::string ("aodv"));
-    }
-}
-
-void
-AodvExample::InstallInternetStack ()
-{
-  AodvHelper aodv;
-  // you can configure AODV attributes here using aodv.Set(name, value)
-  InternetStackHelper stack;
-  stack.SetRoutingHelper (aodv); // has effect on the next Install ()
-  stack.Install (nodes);
-  Ipv4AddressHelper address;
-  address.SetBase ("10.0.0.0", "255.0.0.0");
-  interfaces = address.Assign (devices);
-
-  if (printRoutes)
-    {
-      Ptr<OutputStreamWrapper> routingStream = Create<OutputStreamWrapper> ("aodv.routes", std::ios::out);
-      aodv.PrintRoutingTableAllAt (Seconds (8), routingStream);
-    }
-}
-
-void
-AodvExample::InstallApplications ()
-{
-  V4PingHelper ping (interfaces.GetAddress (size - 1));
-  ping.SetAttribute ("Verbose", BooleanValue (true));
-
-  ApplicationContainer p = ping.Install (nodes.Get (0));
-  p.Start (Seconds (0));
-  p.Stop (Seconds (totalTime) - Seconds (0.001));
-
-  // move node away
-  Ptr<Node> node = nodes.Get (size/2);
-  Ptr<MobilityModel> mob = node->GetObject<MobilityModel> ();
-  Simulator::Schedule (Seconds (totalTime/3), &MobilityModel::SetPosition, mob, Vector (1e5, 1e5, 1e5));
-}
-
